@@ -219,6 +219,69 @@ let warned=false;
 function noSpeech(){if(warned)return;warned=true;toastErr('This browser cannot speak out loud. Open the app in Chrome on the tablet, and check that a text-to-speech voice is installed.')}
 const words=i=>i.say||i.label;
 
+/* Natural voice (ElevenLabs).
+   Each button's words are recorded once and saved on this device, so they play with no internet.
+   Whole sentences are recorded live when online and saved too; offline, the saved words play one after another.
+   The API key stays on this device only: it is not in the app's code or in backups. */
+const EL_KEY='deanna-voice-elkey', EL_DEFAULT_VOICE='r1KmysJdVYZjJCm4mL3b';
+const elKey=()=>{try{return localStorage.getItem(EL_KEY)||''}catch(e){return ''}};
+const elVoice=()=>S.settings.elVoice||EL_DEFAULT_VOICE;
+const elOn=()=>!!(S.settings.useEl&&elKey());
+const clipId=t=>elVoice()+'|'+t.trim().toLowerCase();
+const clips=new Map(); // clipId -> object URL, loaded into memory so a tap can play instantly
+let dbp=null;
+function db(){if(!dbp)dbp=new Promise((res,rej)=>{try{const r=indexedDB.open('deanna-voice-clips',1);
+  r.onupgradeneeded=()=>r.result.createObjectStore('clips');r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error)}catch(e){rej(e)}});return dbp}
+async function loadClips(){try{const d=await db();await new Promise(res=>{const tx=d.transaction('clips').objectStore('clips').openCursor();
+  tx.onsuccess=()=>{const c=tx.result;if(!c)return res();if(!clips.has(c.key))clips.set(c.key,URL.createObjectURL(c.value));c.continue()};tx.onerror=()=>res()})}catch(e){}}
+async function putClip(id,blob){clips.set(id,URL.createObjectURL(blob));try{const d=await db();d.transaction('clips','readwrite').objectStore('clips').put(blob,id)}catch(e){}}
+async function fetchClip(text){
+  const r=await fetch('https://api.elevenlabs.io/v1/text-to-speech/'+encodeURIComponent(elVoice())+'?output_format=mp3_44100_128',
+    {method:'POST',headers:{'xi-api-key':elKey(),'Content-Type':'application/json','Accept':'audio/mpeg'},
+     body:JSON.stringify({text,model_id:'eleven_multilingual_v2'})});
+  if(!r.ok){let m='';try{m=(await r.json()).detail;m=typeof m==='string'?m:(m&&(m.message||m.status))||''}catch(e){}
+    throw new Error(r.status===401?'The ElevenLabs key was not accepted. Check it in Settings.':(m||('ElevenLabs error '+r.status)))}
+  const b=await r.blob();await putClip(clipId(text),b);return b;
+}
+// a short silent sound, played inside the tap so the phone lets the sentence play when it arrives
+const SILENT=(()=>{const n=800,buf=new ArrayBuffer(44+n),d=new DataView(buf),w=(o,t)=>{for(let i=0;i<t.length;i++)d.setUint8(o+i,t.charCodeAt(i))};
+  w(0,'RIFF');d.setUint32(4,36+n,true);w(8,'WAVE');w(12,'fmt ');d.setUint32(16,16,true);d.setUint16(20,1,true);d.setUint16(22,1,true);
+  d.setUint32(24,8000,true);d.setUint32(28,8000,true);d.setUint16(32,1,true);d.setUint16(34,8,true);w(36,'data');d.setUint32(40,n,true);
+  for(let i=0;i<n;i++)d.setUint8(44+i,128);let bin='';new Uint8Array(buf).forEach(x=>bin+=String.fromCharCode(x));return 'data:audio/wav;base64,'+btoa(bin)})();
+const player=new Audio();player.preload='auto';
+let queue=[];
+player.addEventListener('ended',()=>{if(queue.length){player.src=queue.shift();player.play().catch(()=>{})}});
+function playUrls(urls){queue=urls.slice(1);try{player.pause()}catch(e){}if('speechSynthesis' in window)try{speechSynthesis.cancel()}catch(e){}
+  player.src=urls[0];player.play().catch(()=>{})}
+function say(text){
+  if(!text)return;
+  if(elOn()){const u=clips.get(clipId(text));if(u){playUrls([u]);return}
+    if(navigator.onLine!==false){fetchClip(text).then(b=>{const u2=clips.get(clipId(text));if(u2)playUrls([u2])}).catch(()=>speak(text));return}}
+  speak(text);
+}
+function saySentence(list){
+  const text=list.map(words).join(' ');if(!text)return;
+  if(list.length===1)return say(text);
+  if(elOn()){
+    const whole=clips.get(clipId(text));if(whole)return playUrls([whole]);
+    const parts=list.map(i=>clips.get(clipId(words(i))));
+    const offlineFallback=()=>{if(parts.every(Boolean))playUrls(parts);else speak(text)};
+    if(navigator.onLine!==false){
+      // play something right away is less important than one smooth sentence; unlock audio inside the tap
+      player.src=SILENT;
+      player.play().catch(()=>{});
+      fetchClip(text).then(()=>{const u=clips.get(clipId(text));if(u)playUrls([u])}).catch(offlineFallback);return}
+    return offlineFallback();
+  }
+  speak(text);
+}
+async function recordAll(onProgress){
+  const texts=[...new Set(Object.values(S.boards).flatMap(b=>b.items.map(i=>words(i))).filter(Boolean))];
+  const todo=texts.filter(t=>!clips.has(clipId(t)));let done=0,err=null;
+  for(const t of todo){try{await fetchClip(t)}catch(e){err=e;break}done++;onProgress&&onProgress(done,todo.length)}
+  if(err)throw err;return {done,total:texts.length};
+}
+
 /* Forgiving press handling.
    A press counts when the finger lifts (browsers only allow speech from a finger lift, not a touch-down).
    Hold duration: the finger must stay down this long. Ignore repeats: presses right after one are skipped.
@@ -290,12 +353,12 @@ function renderStrip(){
   s.scrollLeft=s.scrollWidth;
 }
 function tapItem(i){
-  if(i.link&&S.boards[i.link]){stack.push(board);board=i.link;page=0;render();speak(i.label);return}
-  if(S.settings.mode==='speak'){speak(words(i));return}
-  sentence.push(i);renderStrip();speak(words(i));
+  if(i.link&&S.boards[i.link]){stack.push(board);board=i.link;page=0;render();say(i.label);return}
+  if(S.settings.mode==='speak'){say(words(i));return}
+  sentence.push(i);renderStrip();say(words(i));
 }
 bindPress($('#homeBtn'),()=>{board=S.home;page=0;stack=[];render()});
-bindPress($('#strip'),()=>speak(sentence.map(words).join(' ')));
+bindPress($('#strip'),()=>saySentence(sentence));
 bindPress($('#backspaceBtn'),()=>{sentence.pop();renderStrip()});
 bindPress($('#clearBtn'),()=>{sentence=[];renderStrip()});
 bindPress($('#prevBtn'),()=>{page--;render()},{always:true});
@@ -383,6 +446,7 @@ function editItem(item){
     if(link==='__new'){link='b'+id();S.boards[link]={name:d.label,items:[]};d.color='folder'}
     d.link=link;
     if(isNew)b.items.push(d);else Object.assign(b.items[idx()],d);
+    if(elOn()&&navigator.onLine!==false&&!clips.has(clipId(words(d))))fetchClip(words(d)).catch(()=>{});
     if(save()){close();render()}
   };
 }
@@ -402,7 +466,15 @@ function openSettings(){
     <div class="row"><div class="field"><label for="s-hold">Hold before it counts (seconds)</label><input type="number" id="s-hold" min="0" max="3" step="0.1" value="${(st.holdMs/1000).toFixed(1)}"></div>
       <div class="field"><label for="s-rep">Ignore extra taps for (seconds)</label><input type="number" id="s-rep" min="0" max="5" step="0.1" value="${(st.repeatMs/1000).toFixed(1)}"></div></div>
     <p class="note">0 hold means a picture speaks as soon as she lifts her finger. Raise it if she brushes buttons by accident.</p>
-    <div class="field"><label for="s-voice">Voice</label><select id="s-voice"><option value="">Device default</option>${vs}</select></div>
+    <h2>Natural voice</h2>
+    <p>Uses an ElevenLabs voice instead of the device voice. Each button is recorded once and saved on this tablet, so it works without internet. The key stays on this device only.</p>
+    <div class="row"><div class="field"><label for="s-useel">Use the natural voice</label><select id="s-useel"><option value="0">No, use the device voice</option><option value="1" ${st.useEl?'selected':''}>Yes</option></select></div>
+      <div class="field"><label for="s-elvoice">ElevenLabs voice ID</label><input type="text" id="s-elvoice" value="${esc(st.elVoice||EL_DEFAULT_VOICE)}" autocomplete="off" spellcheck="false"></div></div>
+    <div class="field"><label for="s-elkey">ElevenLabs API key</label><input type="password" id="s-elkey" value="${esc(elKey())}" autocomplete="off" spellcheck="false" placeholder="Paste the key here"></div>
+    <div class="btns" style="justify-content:flex-start"><button class="btn" id="rec">Record every button now</button></div>
+    <p class="note" id="recmsg">${clips.size} recordings saved on this device.</p>
+    <h2>Device voice</h2>
+    <div class="field"><label for="s-voice">Voice when the natural voice is off or not recorded</label><select id="s-voice"><option value="">Device default</option>${vs}</select></div>
     <div class="row"><div class="field"><label for="s-rate">Speed (0.5 to 1.5)</label><input type="number" id="s-rate" min="0.5" max="1.5" step="0.05" value="${st.rate}"></div>
       <div class="field"><label for="s-pitch">Pitch (0.5 to 1.5)</label><input type="number" id="s-pitch" min="0.5" max="1.5" step="0.05" value="${st.pitch}"></div></div>
     <div class="btns" style="justify-content:flex-start"><button class="btn" id="test">Test the voice</button></div>
@@ -415,8 +487,16 @@ function openSettings(){
     <div class="btns"><button class="btn" id="cancel">Cancel</button><button class="btn primary" id="saveS">Save settings</button></div>`);
   const v=k=>p.querySelector(k).value;
   p.querySelector('#cancel').onclick=close;
-  p.querySelector('#test').onclick=()=>{const o={...st};st.voiceURI=v('#s-voice');st.rate=+v('#s-rate');st.pitch=+v('#s-pitch');speak('Hi, I am Deanna. I would like a drink, please.');Object.assign(st,o)};
-  p.querySelector('#exp').onclick=()=>{const t=JSON.stringify(S);const ta=p.querySelector('#bk');ta.hidden=false;ta.value=t;
+  const keepEl=()=>{try{const k=v('#s-elkey').trim();if(k)localStorage.setItem(EL_KEY,k);else localStorage.removeItem(EL_KEY)}catch(e){}
+    st.elVoice=v('#s-elvoice').trim()||EL_DEFAULT_VOICE;st.useEl=v('#s-useel')==='1'};
+  p.querySelector('#test').onclick=()=>{const o={...st};keepEl();st.voiceURI=v('#s-voice');st.rate=+v('#s-rate');st.pitch=+v('#s-pitch');say('Hi, I would like a drink, please.');Object.assign(st,o)};
+  p.querySelector('#rec').onclick=async()=>{const m=p.querySelector('#recmsg');keepEl();
+    if(!elKey()){m.textContent='Paste the ElevenLabs key first.';return}
+    if(navigator.onLine===false){m.textContent='Connect to Wi-Fi to record.';return}
+    m.textContent='Recording…';
+    try{const r=await recordAll((d,n)=>{m.textContent=`Recording ${d} of ${n}…`});save();m.textContent=`Done. ${r.total} buttons have the natural voice.`}
+    catch(e){m.textContent='Stopped: '+e.message}};
+  p.querySelector('#exp').onclick=()=>{const t=JSON.stringify(S);/* the key is stored apart from S, so it never lands in a backup */const ta=p.querySelector('#bk');ta.hidden=false;ta.value=t;
     (navigator.clipboard?navigator.clipboard.writeText(t):Promise.reject()).then(()=>{p.querySelector('#smsg').textContent='Backup copied.'}).catch(()=>{ta.select();p.querySelector('#smsg').textContent='Select all the text in the box and copy it.'})};
   p.querySelector('#imp').onclick=()=>{const fi=$('#importIn');fi.value='';fi.onchange=()=>{const f=fi.files[0];if(!f)return;const r=new FileReader();r.onload=()=>{try{const o=JSON.parse(r.result);if(!o.boards||!o.settings)throw 0;S=o;save();board=S.home;page=0;close();applyTheme();render()}catch(e){p.querySelector('#smsg').textContent='That file is not a backup from this app.'}};r.readAsText(f)};fi.click()};
   p.querySelector('#reset').onclick=()=>{const q=modal(`<h2>Start over?</h2><p>This replaces every page and photo with the sample pages. Copy a backup first if you want to keep them.</p><div class="btns"><button class="btn" id="n">Go back</button><button class="btn danger" id="y">Start over</button></div>`);
@@ -427,7 +507,8 @@ function openSettings(){
     bd.name=v('#s-name').trim()||bd.name;
     Object.assign(st,{cols:cl(parseInt(v('#s-cols'))||5,2,10),rows:cl(parseInt(v('#s-rows'))||4,1,8),mode:v('#s-mode'),
       holdMs:Math.round(cl(+v('#s-hold')||0,0,3)*1000),repeatMs:Math.round(cl(+v('#s-rep')||0,0,5)*1000),
-      voiceURI:v('#s-voice'),rate:cl(+v('#s-rate')||1,.5,1.5),pitch:cl(+v('#s-pitch')||1,.5,1.5),theme:v('#s-theme'),pin});
+      voiceURI:v('#s-voice'),useEl:v('#s-useel')==='1',elVoice:v('#s-elvoice').trim()||EL_DEFAULT_VOICE,rate:cl(+v('#s-rate')||1,.5,1.5),pitch:cl(+v('#s-pitch')||1,.5,1.5),theme:v('#s-theme'),pin});
+    keepEl();
     if(save()){applyTheme();close();render()}
   };
 }
@@ -435,7 +516,7 @@ function openSettings(){
 /* keep screen awake while open, where allowed */
 async function wake(){try{if(navigator.wakeLock)await navigator.wakeLock.request('screen')}catch(e){}}
 document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')wake()});
-wake();applyTheme();render();
+wake();applyTheme();render();loadClips();
 })();
 </script>
 
