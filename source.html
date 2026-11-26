@@ -183,34 +183,51 @@ function applyTheme(){if(S.settings.theme)document.documentElement.setAttribute(
 let voices=[];
 function loadVoices(){try{voices=speechSynthesis.getVoices()||[]}catch(e){voices=[]}}
 if('speechSynthesis' in window){loadVoices();speechSynthesis.onvoiceschanged=loadVoices}
+let lastUtter=null; // keep a reference so Chrome doesn't drop the utterance mid-sentence
 function speak(text){
-  if(!text||!('speechSynthesis' in window))return;
-  try{speechSynthesis.cancel();const u=new SpeechSynthesisUtterance(text);
-    const v=voices.find(v=>v.voiceURI===S.settings.voiceURI);if(v){u.voice=v;u.lang=v.lang}
-    u.rate=+S.settings.rate||1;u.pitch=+S.settings.pitch||1;speechSynthesis.speak(u)}catch(e){}
+  if(!text)return;
+  if(!('speechSynthesis' in window)){noSpeech();return}
+  try{
+    if(speechSynthesis.speaking||speechSynthesis.pending)speechSynthesis.cancel();
+    if(speechSynthesis.paused)speechSynthesis.resume();
+    const u=new SpeechSynthesisUtterance(text);
+    const v=voices.find(v=>v.voiceURI===S.settings.voiceURI);if(v){u.voice=v;u.lang=v.lang}else{u.lang='en-US'}
+    u.rate=+S.settings.rate||1;u.pitch=+S.settings.pitch||1;u.volume=1;
+    lastUtter=u;speechSynthesis.speak(u);
+  }catch(e){noSpeech()}
 }
+let warned=false;
+function noSpeech(){if(warned)return;warned=true;toastErr('This browser cannot speak out loud. Open the app in Chrome on the tablet, and check that a text-to-speech voice is installed.')}
 const words=i=>i.say||i.label;
 
-/* forgiving press handling: hold duration, ignore repeats, one finger at a time, location of first touch wins */
-let lockUntil=0, activePointer=null;
+/* Forgiving press handling.
+   A press counts when the finger lifts (browsers only allow speech from a finger lift, not a touch-down).
+   Hold duration: the finger must stay down this long. Ignore repeats: presses right after one are skipped.
+   One finger at a time, and the button first touched wins even if the finger slides. */
+let lockUntil=0, press=null;
+function endPress(e,cancel){
+  if(!press||e.pointerId!==press.id)return;
+  const p=press;press=null;
+  p.el.classList.remove('holding','pressed');
+  if(cancel)return;
+  const now=Date.now();
+  if(now-p.start<p.hold||now<lockUntil)return;
+  lockUntil=now+(+S.settings.repeatMs||0);
+  p.fn();
+}
+document.addEventListener('pointerup',e=>endPress(e,false),true);
+document.addEventListener('pointercancel',e=>endPress(e,true),true);
 function bindPress(el,fn,opts){
   opts=opts||{};
   el.addEventListener('contextmenu',e=>e.preventDefault());
   el.addEventListener('pointerdown',e=>{
     if(editing&&!opts.always)return;
-    if(activePointer!==null)return;
-    if(Date.now()<lockUntil)return;
-    activePointer=e.pointerId;try{el.setPointerCapture(e.pointerId)}catch(_){}
-    el.classList.add('pressed');
+    if(press){if(Date.now()-press.start<10000)return;press=null} // a stuck press never blocks the board for long
     const hold=opts.hold!=null?opts.hold:(+S.settings.holdMs||0);
-    const fire=()=>{lockUntil=Date.now()+(+S.settings.repeatMs||0);fn()};
-    if(hold<=0){fire();el._t=null}
-    else{el.style.setProperty('--hold-ms',hold+'ms');requestAnimationFrame(()=>el.classList.add('holding'));
-      el._t=setTimeout(()=>{el._t=null;el.classList.remove('holding');fire()},hold)}
+    press={id:e.pointerId,el,fn,hold,start:Date.now()};
+    el.classList.add('pressed');
+    if(hold>0){el.style.setProperty('--hold-ms',hold+'ms');requestAnimationFrame(()=>{if(press&&press.el===el)el.classList.add('holding')})}
   });
-  const end=e=>{if(e.pointerId!==activePointer)return;activePointer=null;
-    if(el._t){clearTimeout(el._t);el._t=null}el.classList.remove('holding','pressed')};
-  el.addEventListener('pointerup',end);el.addEventListener('pointercancel',end);
   el.addEventListener('keydown',e=>{if((e.key==='Enter'||e.key===' ')&&!editing){e.preventDefault();fn()}});
 }
 
@@ -359,7 +376,7 @@ function openSettings(){
       <option value="speak" ${st.mode==='speak'?'selected':''}>Just say it</option></select></div>
     <div class="row"><div class="field"><label for="s-hold">Hold before it counts (seconds)</label><input type="number" id="s-hold" min="0" max="3" step="0.1" value="${(st.holdMs/1000).toFixed(1)}"></div>
       <div class="field"><label for="s-rep">Ignore extra taps for (seconds)</label><input type="number" id="s-rep" min="0" max="5" step="0.1" value="${(st.repeatMs/1000).toFixed(1)}"></div></div>
-    <p class="note">0 hold means a picture works the moment she touches it. Raise it if she brushes buttons by accident.</p>
+    <p class="note">0 hold means a picture speaks as soon as she lifts her finger. Raise it if she brushes buttons by accident.</p>
     <div class="field"><label for="s-voice">Voice</label><select id="s-voice"><option value="">Device default</option>${vs}</select></div>
     <div class="row"><div class="field"><label for="s-rate">Speed (0.5 to 1.5)</label><input type="number" id="s-rate" min="0.5" max="1.5" step="0.05" value="${st.rate}"></div>
       <div class="field"><label for="s-pitch">Pitch (0.5 to 1.5)</label><input type="number" id="s-pitch" min="0.5" max="1.5" step="0.05" value="${st.pitch}"></div></div>
