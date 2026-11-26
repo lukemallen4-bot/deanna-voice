@@ -74,7 +74,7 @@ button{font:inherit;color:inherit}
 .foot{display:flex;align-items:center;gap:10px;min-height:44px}
 .foot .name{font-weight:700;color:var(--muted);flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .pager{border:2px solid var(--line);background:var(--panel);border-radius:12px;min-width:110px;min-height:56px;font-weight:700;font-size:1.05rem;cursor:pointer}
-.gear{position:relative;width:44px;height:44px;border-radius:50%;border:2px solid var(--line);background:var(--panel);color:var(--muted);font-size:20px;cursor:pointer;overflow:hidden;touch-action:none}
+.gear{position:relative;width:56px;height:56px;border-radius:50%;border:2px solid var(--line);background:var(--panel);color:var(--muted);font-size:20px;cursor:pointer;overflow:hidden;touch-action:none}
 .gear .ring{position:absolute;inset:0;background:var(--accent);opacity:.35;transform:scaleY(0);transform-origin:bottom}
 .gear.holding .ring{transform:scaleY(1);transition:transform 2s linear}
 .editbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;background:var(--accent);color:var(--bg);border-radius:12px;padding:8px 12px;font-weight:700}
@@ -131,7 +131,7 @@ button{font:inherit;color:inherit}
       <span class="name" id="boardName"></span>
       <button class="pager" id="nextBtn" hidden>Page ▶</button>
       <button class="pager" id="clearBtn" aria-label="Clear sentence">✕ Clear</button>
-      <button class="gear" id="gear" aria-label="Caregiver settings, hold for 2 seconds"><span class="ring"></span><span style="position:relative">⚙</span></button>
+      <button class="gear" id="gear" aria-label="Caregiver settings: tap 3 times or hold for 2 seconds"><span class="ring"></span><span style="position:relative">⚙</span></button>
     </div>
   </div>
 </div>
@@ -296,7 +296,10 @@ bindPress($('#nextBtn'),()=>{page++;render()},{always:true});
   if(window.PointerEvent){g.addEventListener('pointerdown',start);document.addEventListener('pointerup',lift,true)}
   else{g.addEventListener('touchstart',start,{passive:false});document.addEventListener('touchend',lift,true)}
   g.addEventListener('contextmenu',e=>e.preventDefault());
-  g.addEventListener('click',e=>e.preventDefault());
+  // Also opens with 3 quick taps, for screens where a long touch never reaches the page.
+  let taps=[];
+  g.addEventListener('click',e=>{e.preventDefault();const now=Date.now();taps=taps.filter(x=>now-x<1500);taps.push(now);
+    if(taps.length>=3){taps=[];if(t){clearTimeout(t);t=null}g.classList.remove('holding');if($('#modal').hidden)editing?openSettings():askPin()}});
 })();
 $('#doneBtn').onclick=()=>{editing=false;save();render()};
 $('#settingsBtn').onclick=()=>openSettings();
