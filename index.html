@@ -6,6 +6,9 @@
 <title>Deanna's Voice</title>
 <meta name="theme-color" content="#0f6e8c">
 <meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="My Voice">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icon-192.png">
 <link rel="apple-touch-icon" href="icon-192.png">
@@ -124,7 +127,8 @@ button{font:inherit;color:inherit}
 :focus-visible{outline:3px solid var(--accent);outline-offset:2px}
 @media (prefers-reduced-motion: reduce){.cell.holding .hold,.gear.holding .ring{transition:none}.cell.pressed{transform:none}}
 .foot{flex-wrap:wrap}
-@media (max-width:640px){.tool{min-width:72px}.pager{min-width:0;padding:0 12px}.foot{gap:8px}}
+@media (max-width:640px){.tool{min-width:72px}.pager{min-width:0;padding:0 12px}.foot{gap:8px;flex-wrap:nowrap}.foot .name{display:none}.pl{display:none}.pager{padding:0 10px;min-width:56px}.foot .sp{flex:1}
+  .top{height:clamp(96px,14vh,130px)}#app{gap:8px}.grid{gap:8px}}
 </style>
 
 <div id="app">
@@ -141,9 +145,10 @@ button{font:inherit;color:inherit}
     <div class="grid" id="grid"></div>
     <div class="foot">
       <button class="pager homebtn" id="homeBtn" aria-label="Home page">⌂ Home</button>
-      <button class="pager" id="prevBtn" hidden>◀ Page</button>
+      <button class="pager" id="prevBtn" aria-label="Previous page" hidden>◀<span class="pl"> Page</span></button>
       <span class="name" id="boardName"></span>
-      <button class="pager" id="nextBtn" hidden>Page ▶</button>
+      <button class="pager" id="nextBtn" aria-label="Next page" hidden><span class="pl">Page </span>▶</button>
+      <span class="sp"></span>
       <button class="pager" id="clearBtn" aria-label="Clear sentence">✕ Clear</button>
       <button class="gear" id="gear" aria-label="Caregiver settings: tap 3 times or hold for 2 seconds"><span class="ring"></span><span style="position:relative">⚙</span></button>
     </div>
@@ -180,7 +185,7 @@ function ketoDrink(){return {name:'Drinks',items:[
 function starter(){
   return {
     version:1,dataV:3,
-    settings:{cols:5,rows:3,mode:'sentence',holdMs:0,repeatMs:800,voiceURI:'',rate:0.9,pitch:1,pin:'1234',theme:''},
+    settings:{cols:5,rows:3,phoneCols:2,phoneRows:3,mode:'sentence',holdMs:0,repeatMs:800,voiceURI:'',rate:0.9,pitch:1,pin:'1234',theme:''},
     home:'home',
     boards:{
       home:{name:'Home',items:[
@@ -341,6 +346,11 @@ function bindPress(el,fn,opts){
   el.addEventListener('keydown',e=>{if((e.key==='Enter'||e.key===' ')&&!editing){e.preventDefault();fn()}});
 }
 
+/* Phones (short side under 600px) use their own grid so buttons stay about an inch or more.
+   On an iPhone 12, 2 across by 3 down gives buttons about 1.1 by 1.2 inches. */
+const isPhone=()=>Math.min(innerWidth,innerHeight)<600;
+function gridSize(){const st=S.settings;return isPhone()?{cols:st.phoneCols||2,rows:st.phoneRows||3}:{cols:st.cols,rows:st.rows}}
+let rz=null;addEventListener('resize',()=>{clearTimeout(rz);rz=setTimeout(()=>{if(!editing||$('#modal').hidden)render()},150)});
 /* rendering */
 const $=s=>document.querySelector(s);
 function pic(i,cls){
@@ -349,7 +359,7 @@ function pic(i,cls){
 }
 function render(){
   const b=S.boards[board]||S.boards[S.home];
-  const {cols,rows}=S.settings, per=cols*rows;
+  const {cols,rows}=gridSize(), per=cols*rows;
   const items=b.items.slice();
   if(editing)items.push({add:true});
   const pages=Math.max(1,Math.ceil(items.length/per));
@@ -485,8 +495,11 @@ function openSettings(){
   const bd=S.boards[board];
   const p=modal(`<h2>Settings</h2>
     <div class="field"><label for="s-name">Name of this page</label><input type="text" id="s-name" value="${esc(bd.name)}"></div>
-    <div class="row"><div class="field"><label for="s-cols">Pictures across</label><input type="number" id="s-cols" min="2" max="10" value="${st.cols}"></div>
-      <div class="field"><label for="s-rows">Pictures down</label><input type="number" id="s-rows" min="1" max="8" value="${st.rows}"></div></div>
+    <div class="row"><div class="field"><label for="s-pcols">Phone: pictures across</label><input type="number" id="s-pcols" min="1" max="6" value="${st.phoneCols||2}"></div>
+      <div class="field"><label for="s-prows">Phone: pictures down</label><input type="number" id="s-prows" min="1" max="8" value="${st.phoneRows||3}"></div></div>
+    <p class="note">On an iPhone 12, 2 across by 3 down gives buttons about 1.1 by 1.2 inches. 3 across by 4 down fits more but shrinks them to about 0.75 by 0.85 inches.</p>
+    <div class="row"><div class="field"><label for="s-cols">Tablet: pictures across</label><input type="number" id="s-cols" min="2" max="10" value="${st.cols}"></div>
+      <div class="field"><label for="s-rows">Tablet: pictures down</label><input type="number" id="s-rows" min="1" max="8" value="${st.rows}"></div></div>
     <p class="note">Measure a button with a ruler after saving. On a 10 or 11 inch tablet, 5 across by 3 down gives buttons about 1.5 to 1.8 inches wide.</p>
     <div class="field"><label for="s-mode">When she taps a picture</label><select id="s-mode">
       <option value="sentence" ${st.mode==='sentence'?'selected':''}>Say it and add it to the sentence</option>
@@ -533,7 +546,7 @@ function openSettings(){
     const pin=v('#s-pin').trim();if(!/^\d{4,6}$/.test(pin)){p.querySelector('#smsg').textContent='The PIN must be 4 to 6 digits.';return}
     const cl=(x,a,b)=>Math.min(b,Math.max(a,x));
     bd.name=v('#s-name').trim()||bd.name;
-    Object.assign(st,{cols:cl(parseInt(v('#s-cols'))||5,2,10),rows:cl(parseInt(v('#s-rows'))||4,1,8),mode:v('#s-mode'),
+    Object.assign(st,{phoneCols:cl(parseInt(v('#s-pcols'))||2,1,6),phoneRows:cl(parseInt(v('#s-prows'))||3,1,8),cols:cl(parseInt(v('#s-cols'))||5,2,10),rows:cl(parseInt(v('#s-rows'))||4,1,8),mode:v('#s-mode'),
       holdMs:Math.round(cl(+v('#s-hold')||0,0,3)*1000),repeatMs:Math.round(cl(+v('#s-rep')||0,0,5)*1000),
       voiceURI:v('#s-voice'),useEl:v('#s-useel')==='1',elVoice:v('#s-elvoice').trim()||EL_DEFAULT_VOICE,rate:cl(+v('#s-rate')||1,.5,1.5),pitch:cl(+v('#s-pitch')||1,.5,1.5),theme:v('#s-theme'),pin});
     keepEl();
