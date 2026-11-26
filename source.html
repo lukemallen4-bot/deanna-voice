@@ -167,8 +167,8 @@ function ketoDrink(){return {name:'Drinks',items:[
   it('Almond milk','🥛','thing'),it('Heavy cream','🍶','thing'),it('Coffee','☕','thing'),it('Tea','🍵','thing'),it('Diet soda','🥫','thing')]}}
 function starter(){
   return {
-    version:1,dataV:3,
-    settings:{cols:5,rows:3,phoneCols:2,phoneRows:3,mode:'sentence',holdMs:0,repeatMs:800,voiceURI:'',rate:0.9,pitch:1,pin:'1234',theme:''},
+    version:1,dataV:4,
+    settings:{cols:5,rows:3,phoneCols:3,phoneRows:4,mode:'sentence',holdMs:0,repeatMs:800,voiceURI:'',rate:0.9,pitch:1,pin:'1234',theme:''},
     home:'home',
     boards:{
       home:{name:'Home',items:[
@@ -197,7 +197,8 @@ function starter(){
 
 let S=load()||starter();
 (function migrate(){
-  if((S.dataV||0)>=3)return;
+  if((S.dataV||0)<4){S.settings.phoneCols=3;S.settings.phoneRows=4}
+  if((S.dataV||0)>=3){S.dataV=4;try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}return}
   const orig=['Eat','Drink','More','Water','Juice','Coffee','Milk','Snack','Breakfast','Lunch','Dinner','Hungry','Thirsty'];
   const f=S.boards.food, same=f&&f.items.map(i=>i.label).join('|')===orig.join('|');
   if(!f||same)S.boards.food=ketoFood(); else S.boards.ketofood=Object.assign(ketoFood(),{name:'Keto food'});
@@ -207,7 +208,7 @@ let S=load()||starter();
   if(h&&!h.items.some(i=>i.link==='drink')){const k=h.items.findIndex(i=>i.label==='Tired'&&!i.link);
     const d=fold('Drinks','🥤','drink');if(k>=0){h.items.splice(k,1,d);const fe=S.boards.feel;if(fe&&!fe.items.some(i=>i.label==='Tired'))fe.items.push(it('Tired','😴','desc'))}else h.items.push(d)}
   if(S.boards.ketofood&&h)h.items.push(fold('Keto food','🥑','ketofood'));
-  S.dataV=3;try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}
+  S.dataV=4;try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}
 })();
 let board=S.home, page=0, stack=[], editing=false, sentence=[];
 function load(){try{const t=localStorage.getItem(KEY);return t?JSON.parse(t):null}catch(e){return null}}
@@ -330,9 +331,9 @@ function bindPress(el,fn,opts){
 }
 
 /* Phones (short side under 600px) use their own grid so buttons stay about an inch or more.
-   On an iPhone 12, 2 across by 3 down gives buttons about 1.1 by 1.2 inches. */
+   On an iPhone 12, 3 across by 4 down gives buttons about 0.75 by 0.85 inches. */
 const isPhone=()=>Math.min(innerWidth,innerHeight)<600;
-function gridSize(){const st=S.settings;return isPhone()?{cols:st.phoneCols||2,rows:st.phoneRows||3}:{cols:st.cols,rows:st.rows}}
+function gridSize(){const st=S.settings;return isPhone()?{cols:st.phoneCols||3,rows:st.phoneRows||4}:{cols:st.cols,rows:st.rows}}
 let rz=null;addEventListener('resize',()=>{clearTimeout(rz);rz=setTimeout(()=>{if(!editing||$('#modal').hidden)render()},150)});
 /* rendering */
 const $=s=>document.querySelector(s);
@@ -478,9 +479,9 @@ function openSettings(){
   const bd=S.boards[board];
   const p=modal(`<h2>Settings</h2>
     <div class="field"><label for="s-name">Name of this page</label><input type="text" id="s-name" value="${esc(bd.name)}"></div>
-    <div class="row"><div class="field"><label for="s-pcols">Phone: pictures across</label><input type="number" id="s-pcols" min="1" max="6" value="${st.phoneCols||2}"></div>
-      <div class="field"><label for="s-prows">Phone: pictures down</label><input type="number" id="s-prows" min="1" max="8" value="${st.phoneRows||3}"></div></div>
-    <p class="note">On an iPhone 12, 2 across by 3 down gives buttons about 1.1 by 1.2 inches. 3 across by 4 down fits more but shrinks them to about 0.75 by 0.85 inches.</p>
+    <div class="row"><div class="field"><label for="s-pcols">Phone: pictures across</label><input type="number" id="s-pcols" min="1" max="6" value="${st.phoneCols||3}"></div>
+      <div class="field"><label for="s-prows">Phone: pictures down</label><input type="number" id="s-prows" min="1" max="8" value="${st.phoneRows||4}"></div></div>
+    <p class="note">On an iPhone 12, 3 across by 4 down gives buttons about 0.75 by 0.85 inches. 2 across by 3 down makes them about 1.1 by 1 inch.</p>
     <div class="row"><div class="field"><label for="s-cols">Tablet: pictures across</label><input type="number" id="s-cols" min="2" max="10" value="${st.cols}"></div>
       <div class="field"><label for="s-rows">Tablet: pictures down</label><input type="number" id="s-rows" min="1" max="8" value="${st.rows}"></div></div>
     <p class="note">Measure a button with a ruler after saving. On a 10 or 11 inch tablet, 5 across by 3 down gives buttons about 1.5 to 1.8 inches wide.</p>
@@ -529,7 +530,7 @@ function openSettings(){
     const pin=v('#s-pin').trim();if(!/^\d{4,6}$/.test(pin)){p.querySelector('#smsg').textContent='The PIN must be 4 to 6 digits.';return}
     const cl=(x,a,b)=>Math.min(b,Math.max(a,x));
     bd.name=v('#s-name').trim()||bd.name;
-    Object.assign(st,{phoneCols:cl(parseInt(v('#s-pcols'))||2,1,6),phoneRows:cl(parseInt(v('#s-prows'))||3,1,8),cols:cl(parseInt(v('#s-cols'))||5,2,10),rows:cl(parseInt(v('#s-rows'))||4,1,8),mode:v('#s-mode'),
+    Object.assign(st,{phoneCols:cl(parseInt(v('#s-pcols'))||3,1,6),phoneRows:cl(parseInt(v('#s-prows'))||4,1,8),cols:cl(parseInt(v('#s-cols'))||5,2,10),rows:cl(parseInt(v('#s-rows'))||4,1,8),mode:v('#s-mode'),
       holdMs:Math.round(cl(+v('#s-hold')||0,0,3)*1000),repeatMs:Math.round(cl(+v('#s-rep')||0,0,5)*1000),
       voiceURI:v('#s-voice'),useEl:v('#s-useel')==='1',elVoice:v('#s-elvoice').trim()||EL_DEFAULT_VOICE,rate:cl(+v('#s-rate')||1,.5,1.5),pitch:cl(+v('#s-pitch')||1,.5,1.5),theme:v('#s-theme'),pin});
     keepEl();
