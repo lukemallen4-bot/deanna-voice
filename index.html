@@ -48,17 +48,18 @@ button{font:inherit;color:inherit}
   padding-block:10px;padding-left:max(16px, env(safe-area-inset-left, 0px));padding-right:max(16px, env(safe-area-inset-right, 0px))}
 
 /* message strip */
-.top{display:flex;gap:10px;align-items:stretch;min-height:96px}
+.top{display:flex;gap:10px;align-items:stretch;height:clamp(110px,21vh,180px);flex:0 0 auto}
 .navbtn,.tool{border:2px solid var(--line);background:var(--panel);border-radius:var(--r);min-width:96px;
   display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;font-weight:700;font-size:1.05rem;cursor:pointer;touch-action:manipulation}
 .navbtn .ico,.tool .ico{font-size:2rem;line-height:1}
 .strip{flex:1;min-width:0;display:flex;gap:8px;align-items:center;overflow-x:auto;padding:8px;border-radius:var(--r);
   background:var(--panel);border:2px solid var(--line);cursor:pointer;touch-action:manipulation}
 .strip:empty::before{content:attr(data-empty);color:var(--muted);font-size:1.1rem;padding-left:8px}
-.chip{flex:0 0 auto;display:flex;flex-direction:column;align-items:center;gap:2px;padding:4px 8px;border-radius:10px;background:var(--bg);min-width:64px}
-.chip img{width:44px;height:44px;object-fit:cover;border-radius:6px}
-.chip .em{font-size:34px;line-height:44px}
-.chip span{font-weight:700;font-size:.95rem}
+.chip{flex:0 0 auto;height:100%;box-sizing:border-box;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;padding:6px 10px;border-radius:10px;background:var(--bg);min-width:80px}
+.chip img{flex:1;min-height:0;max-height:60cqh;aspect-ratio:1;object-fit:cover;border-radius:8px}
+.strip{container-type:size}
+.chip .em{font-size:clamp(28px,46cqh,80px);line-height:1}
+.chip span{font-weight:700;font-size:clamp(15px,20cqh,30px);white-space:nowrap}
 .speakbtn{background:var(--speak);color:var(--speak-fg);border-color:var(--speak);min-width:120px;font-size:1.2rem}
 
 /* board */
@@ -70,7 +71,9 @@ button{font:inherit;color:inherit}
 .cell .pic{flex:1;min-height:0;width:100%;display:flex;align-items:center;justify-content:center}
 .cell .pic img{max-width:100%;max-height:100%;object-fit:contain;border-radius:8px}
 .cell .pic .em{font-size:clamp(28px,6vmin,72px);line-height:1}
-.cell .lbl{font-weight:700;font-size:clamp(14px,2.4vmin,24px);text-align:center;line-height:1.1;overflow-wrap:anywhere}
+.cell{container-type:size}
+.cell .lbl{font-weight:700;font-size:clamp(12px,min(13cqw,15cqh),26px);text-align:center;line-height:1.1;overflow-wrap:normal;word-break:normal;hyphens:none;max-width:100%}
+.cell .pic .em{font-size:clamp(24px,min(38cqw,40cqh),80px)}
 .cell.folder{border-top-left-radius:0}
 .cell.folder::after{content:"";position:absolute;top:0;left:0;width:38%;height:8px;background:var(--fg);opacity:.35;border-bottom-right-radius:8px}
 .cell.pressed{border-color:var(--fg);transform:scale(.97)}
@@ -120,16 +123,14 @@ button{font:inherit;color:inherit}
 .note{font-size:.85rem;color:var(--muted)}
 :focus-visible{outline:3px solid var(--accent);outline-offset:2px}
 @media (prefers-reduced-motion: reduce){.cell.holding .hold,.gear.holding .ring{transition:none}.cell.pressed{transform:none}}
-@media (max-width:640px){.top{min-height:76px}.navbtn,.tool{min-width:64px;font-size:.85rem}.speakbtn{min-width:80px}.navbtn .ico,.tool .ico{font-size:1.5rem}}
+.foot{flex-wrap:wrap}
+@media (max-width:640px){.tool{min-width:72px}.pager{min-width:0;padding:0 12px}.foot{gap:8px}}
 </style>
 
 <div id="app">
   <div class="top">
-    <button class="navbtn" id="homeBtn" aria-label="Home"><span class="ico">⌂</span>Home</button>
-    <div class="strip" id="strip" data-empty="Tap pictures to build a sentence" role="button" aria-label="Sentence. Tap to speak."></div>
-    <button class="tool" id="backspaceBtn" aria-label="Remove last word"><span class="ico">⌫</span>Undo</button>
-    <button class="tool" id="clearBtn" aria-label="Clear sentence"><span class="ico">✕</span>Clear</button>
-    <button class="tool speakbtn" id="speakBtn" aria-label="Speak sentence"><span class="ico">🔊</span>Speak</button>
+    <div class="strip" id="strip" data-empty="Tap pictures to build a sentence. Tap here to say it." role="button" aria-label="Sentence. Tap to say it."></div>
+    <button class="tool" id="backspaceBtn" aria-label="Remove last word"><span class="ico">⌫</span>Back</button>
   </div>
   <div id="editbar" class="editbar" hidden>
     <span>Editing: tap a picture to change it</span><span class="sp"></span>
@@ -139,9 +140,11 @@ button{font:inherit;color:inherit}
   <div class="boardwrap">
     <div class="grid" id="grid"></div>
     <div class="foot">
-      <button class="pager" id="prevBtn" hidden>◀ Back page</button>
+      <button class="pager homebtn" id="homeBtn" aria-label="Home page">⌂ Home</button>
+      <button class="pager" id="prevBtn" hidden>◀ Page</button>
       <span class="name" id="boardName"></span>
-      <button class="pager" id="nextBtn" hidden>More ▶</button>
+      <button class="pager" id="nextBtn" hidden>Page ▶</button>
+      <button class="pager" id="clearBtn" aria-label="Clear sentence">✕ Clear</button>
       <button class="gear" id="gear" aria-label="Caregiver settings, hold for 2 seconds"><span class="ring"></span><span style="position:relative">⚙</span></button>
     </div>
   </div>
@@ -152,7 +155,7 @@ button{font:inherit;color:inherit}
 
 <script>
 (function(){
-const KEY='deanna-voice-v1';
+const KEY='deanna-voice-v2';
 const COLORS=[['people','People'],['action','Doing words'],['desc','Describing'],['thing','Things'],['social','Social'],['place','Places'],['question','Questions'],['folder','Folder']];
 let uid=Date.now()%100000;
 const id=()=>'i'+(uid++).toString(36);
@@ -162,14 +165,16 @@ const fold=(label,emoji,link)=>it(label,emoji,'folder',{link});
 function starter(){
   return {
     version:1,
-    settings:{cols:5,rows:4,mode:'sentence',holdMs:0,repeatMs:800,voiceURI:'',rate:0.9,pitch:1,pin:'1234',theme:''},
+    settings:{cols:5,rows:3,mode:'sentence',holdMs:0,repeatMs:800,voiceURI:'',rate:0.9,pitch:1,pin:'1234',theme:''},
     home:'home',
     boards:{
       home:{name:'Home',items:[
-        it('I want','🙋','action'),it('I need','❗','action'),it('Yes','👍','social'),it('No','👎','social'),it('Help','🆘','action'),
-        it('Bathroom','🚻','place'),it('Drink','🥤','thing'),it('Eat','🍽️','thing'),it('Hurt','🤕','desc'),it('Tired','😴','desc'),
-        it('More','➕','desc'),it('Stop','✋','action'),it('All done','✅','social'),it('Please','🙏','social'),it('Thank you','💐','social'),
-        fold('Feelings','🙂','feel'),fold('People','👪','people'),fold('Food','🍎','food'),fold('Things to do','📺','do'),it('I love you','❤️','social')]},
+        it('Yes','👍','social'),it('No','👎','social'),it('Help','🆘','action'),it('Bathroom','🚻','place'),it('Hurt','🤕','desc'),
+        it('I want','🙋','action'),it('I need','❗','action'),it('Tired','😴','desc'),it('Stop','✋','action'),it('All done','✅','social'),
+        fold('Feelings','🙂','feel'),fold('People','👪','people'),fold('Food','🍎','food'),fold('Things to do','📺','do'),fold('Chat','💬','chat')]},
+      chat:{name:'Chat',items:[
+        it('Hello','👋','social'),it('Goodbye','🙋‍♀️','social'),it('Please','🙏','social'),it('Thank you','💐','social'),it('I love you','❤️','social'),
+        it('How are you?','❓','question'),it('Wait','⏳','action'),it('Again','🔁','desc'),it('I don\'t know','🤷','social'),it('Sorry','😔','social')]},
       feel:{name:'Feelings',items:[
         it('Happy','😀','desc'),it('Sad','😢','desc'),it('Angry','😠','desc'),it('Scared','😨','desc'),it('Sick','🤢','desc'),
         it('Cold','🥶','desc'),it('Hot','🥵','desc'),it('Bored','😑','desc'),it('Excited','🤩','desc'),it('Uncomfortable','😣','desc'),
@@ -178,7 +183,7 @@ function starter(){
         it('Luke','🧑','people'),it('Mom','👩','people'),it('Dad','👨','people'),it('Caregiver','🧑‍⚕️','people'),it('Nurse','👩‍⚕️','people'),
         it('Doctor','🩺','people'),it('Friend','🧑‍🤝‍🧑','people'),it('Me','🙋','people'),it('You','👉','people')]},
       food:{name:'Food',items:[
-        it('Water','💧','thing'),it('Juice','🧃','thing'),it('Coffee','☕','thing'),it('Milk','🥛','thing'),it('Snack','🍪','thing'),
+        it('Eat','🍽️','action'),it('Drink','🥤','action'),it('More','➕','desc'),it('Water','💧','thing'),it('Juice','🧃','thing'),it('Coffee','☕','thing'),it('Milk','🥛','thing'),it('Snack','🍪','thing'),
         it('Breakfast','🥣','thing'),it('Lunch','🥪','thing'),it('Dinner','🍲','thing'),it('Hungry','😋','desc'),it('Thirsty','🫗','desc')]},
       do:{name:'Things to do',items:[
         it('Watch TV','📺','action'),it('Music','🎵','action'),it('Go outside','🌳','action'),it('Go for a ride','🚗','action'),it('Bed','🛏️','place'),
@@ -290,7 +295,6 @@ function tapItem(i){
   sentence.push(i);renderStrip();speak(words(i));
 }
 bindPress($('#homeBtn'),()=>{board=S.home;page=0;stack=[];render()});
-bindPress($('#speakBtn'),()=>speak(sentence.map(words).join(' ')));
 bindPress($('#strip'),()=>speak(sentence.map(words).join(' ')));
 bindPress($('#backspaceBtn'),()=>{sentence.pop();renderStrip()});
 bindPress($('#clearBtn'),()=>{sentence=[];renderStrip()});
@@ -298,11 +302,15 @@ bindPress($('#prevBtn'),()=>{page--;render()},{always:true});
 bindPress($('#nextBtn'),()=>{page++;render()},{always:true});
 
 /* hold-for-2-seconds gear opens PIN pad */
-(function(){const g=$('#gear');let t=null;
-  g.addEventListener('pointerdown',e=>{e.preventDefault();g.classList.add('holding');t=setTimeout(()=>{t=null;g.classList.remove('holding');editing?openSettings():askPin()},2000)});
-  const stop=()=>{if(t){clearTimeout(t);t=null}g.classList.remove('holding')};
-  g.addEventListener('pointerup',stop);g.addEventListener('pointerleave',stop);g.addEventListener('pointercancel',stop);
+/* Phones can cancel a long touch for their own gestures, so the timer only stops when the finger really lifts early. */
+(function(){const g=$('#gear');let t=null,down=0;
+  const open=()=>{t=null;g.classList.remove('holding');editing?openSettings():askPin()};
+  const start=e=>{if(e.cancelable)e.preventDefault();if(t)return;down=Date.now();g.classList.add('holding');t=setTimeout(open,2000)};
+  const lift=()=>{if(t&&Date.now()-down<1900){clearTimeout(t);t=null;g.classList.remove('holding')}};
+  if(window.PointerEvent){g.addEventListener('pointerdown',start);document.addEventListener('pointerup',lift,true)}
+  else{g.addEventListener('touchstart',start,{passive:false});document.addEventListener('touchend',lift,true)}
   g.addEventListener('contextmenu',e=>e.preventDefault());
+  g.addEventListener('click',e=>e.preventDefault());
 })();
 $('#doneBtn').onclick=()=>{editing=false;save();render()};
 $('#settingsBtn').onclick=()=>openSettings();
@@ -384,7 +392,7 @@ function openSettings(){
     <div class="field"><label for="s-name">Name of this page</label><input type="text" id="s-name" value="${esc(bd.name)}"></div>
     <div class="row"><div class="field"><label for="s-cols">Pictures across</label><input type="number" id="s-cols" min="2" max="10" value="${st.cols}"></div>
       <div class="field"><label for="s-rows">Pictures down</label><input type="number" id="s-rows" min="1" max="8" value="${st.rows}"></div></div>
-    <p class="note">Measure a button with a ruler after saving. On a 10 inch tablet, 5 across by 4 down gives buttons about 1.5 inches wide.</p>
+    <p class="note">Measure a button with a ruler after saving. On a 10 or 11 inch tablet, 5 across by 3 down gives buttons about 1.5 to 1.8 inches wide.</p>
     <div class="field"><label for="s-mode">When she taps a picture</label><select id="s-mode">
       <option value="sentence" ${st.mode==='sentence'?'selected':''}>Say it and add it to the sentence</option>
       <option value="speak" ${st.mode==='speak'?'selected':''}>Just say it</option></select></div>
