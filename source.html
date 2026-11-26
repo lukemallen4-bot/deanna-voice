@@ -148,15 +148,30 @@ const id=()=>'i'+(uid++).toString(36);
 const it=(label,emoji,color,extra)=>Object.assign({id:id(),label,say:'',emoji,img:'',color,link:''},extra||{});
 const fold=(label,emoji,link)=>it(label,emoji,'folder',{link});
 
+/* Starter food and drink lists.
+   A starting point only: edit them in the app to match what she eats. */
+function ketoFood(){return {name:'Food',items:[
+  it('Hungry','😋','desc'),it('More','➕','desc'),fold('Vegetables','🥦','veg'),it('Eggs','🍳','thing'),it('Bacon','🥓','thing'),
+  it('Hot dog','🌭','thing',{say:'Hot dog, no bun'}),it('Chicken','🍗','thing'),it('Hamburger','🍔','thing',{say:'Hamburger, no bun'}),it('Steak','🥩','thing'),it('Fish','🐟','thing'),
+  it('Sausage','🍖','thing'),it('Cheese','🧀','thing'),it('Berries','🍓','thing'),it('Avocado','🥑','thing'),it('Snack','🧆','thing',{say:'Keto snack'}),
+  it('Breakfast','🥣','thing'),it('Lunch','🥪','thing'),it('Dinner','🍲','thing'),it('Butter','🧈','thing'),it('Cream cheese','🥯','thing'),
+  it('Whipped cream','🍦','thing'),it('Peanut butter','🥜','thing'),it('Pork rinds','🥓','thing'),it('Olives','🫒','thing'),it('Nuts','🌰','thing')]}}
+function ketoVeg(){return {name:'Vegetables',items:[
+  it('Broccoli','🥦','thing'),it('Green beans','🫛','thing'),it('Spinach','🥬','thing'),it('Asparagus','🌱','thing'),it('Zucchini','🥒','thing'),
+  it('Cucumber','🥒','thing'),it('Salad','🥗','thing'),it('Brussels sprouts','🥬','thing'),it('Celery','🌿','thing'),it('Green pepper','🫑','thing'),
+  it('Cabbage','🥬','thing'),it('Cauliflower','🥦','thing')]}}
+function ketoDrink(){return {name:'Drinks',items:[
+  it('Thirsty','🫗','desc'),it('More','➕','desc'),it('Water','💧','thing'),it('Sparkling water','🫧','thing'),it('Shake','🥤','thing',{say:'My keto shake'}),
+  it('Almond milk','🥛','thing'),it('Heavy cream','🍶','thing'),it('Coffee','☕','thing'),it('Tea','🍵','thing'),it('Diet soda','🥫','thing')]}}
 function starter(){
   return {
-    version:1,
+    version:1,dataV:3,
     settings:{cols:5,rows:3,mode:'sentence',holdMs:0,repeatMs:800,voiceURI:'',rate:0.9,pitch:1,pin:'1234',theme:''},
     home:'home',
     boards:{
       home:{name:'Home',items:[
         it('Yes','👍','social'),it('No','👎','social'),it('Help','🆘','action'),it('Bathroom','🚻','place'),it('Hurt','🤕','desc'),
-        it('I want','🙋','action'),it('I need','❗','action'),it('Tired','😴','desc'),it('Stop','✋','action'),it('All done','✅','social'),
+        it('I want','🙋','action'),it('I need','❗','action'),fold('Drinks','🥤','drink'),it('Stop','✋','action'),it('All done','✅','social'),
         fold('Feelings','🙂','feel'),fold('People','👪','people'),fold('Food','🍎','food'),fold('Things to do','📺','do'),fold('Chat','💬','chat')]},
       chat:{name:'Chat',items:[
         it('Hello','👋','social'),it('Goodbye','🙋‍♀️','social'),it('Please','🙏','social'),it('Thank you','💐','social'),it('I love you','❤️','social'),
@@ -164,13 +179,13 @@ function starter(){
       feel:{name:'Feelings',items:[
         it('Happy','😀','desc'),it('Sad','😢','desc'),it('Angry','😠','desc'),it('Scared','😨','desc'),it('Sick','🤢','desc'),
         it('Cold','🥶','desc'),it('Hot','🥵','desc'),it('Bored','😑','desc'),it('Excited','🤩','desc'),it('Uncomfortable','😣','desc'),
-        it('Pain','⚡','desc'),it('Good','🙂','desc')]},
+        it('Pain','⚡','desc'),it('Good','🙂','desc'),it('Tired','😴','desc')]},
       people:{name:'People',items:[
         it('Luke','🧑','people'),it('Mom','👩','people'),it('Dad','👨','people'),it('Caregiver','🧑‍⚕️','people'),it('Nurse','👩‍⚕️','people'),
         it('Doctor','🩺','people'),it('Friend','🧑‍🤝‍🧑','people'),it('Me','🙋','people'),it('You','👉','people')]},
-      food:{name:'Food',items:[
-        it('Eat','🍽️','action'),it('Drink','🥤','action'),it('More','➕','desc'),it('Water','💧','thing'),it('Juice','🧃','thing'),it('Coffee','☕','thing'),it('Milk','🥛','thing'),it('Snack','🍪','thing'),
-        it('Breakfast','🥣','thing'),it('Lunch','🥪','thing'),it('Dinner','🍲','thing'),it('Hungry','😋','desc'),it('Thirsty','🫗','desc')]},
+      food:ketoFood(),
+      drink:ketoDrink(),
+      veg:ketoVeg(),
       do:{name:'Things to do',items:[
         it('Watch TV','📺','action'),it('Music','🎵','action'),it('Go outside','🌳','action'),it('Go for a ride','🚗','action'),it('Bed','🛏️','place'),
         it('Shower','🚿','action'),it('Phone call','📞','action'),it('iPad','📱','thing'),it('Read','📖','action'),it('Rest','🛋️','action')]}
@@ -179,6 +194,19 @@ function starter(){
 }
 
 let S=load()||starter();
+(function migrate(){
+  if((S.dataV||0)>=3)return;
+  const orig=['Eat','Drink','More','Water','Juice','Coffee','Milk','Snack','Breakfast','Lunch','Dinner','Hungry','Thirsty'];
+  const f=S.boards.food, same=f&&f.items.map(i=>i.label).join('|')===orig.join('|');
+  if(!f||same)S.boards.food=ketoFood(); else S.boards.ketofood=Object.assign(ketoFood(),{name:'Keto food'});
+  if(!S.boards.drink)S.boards.drink=ketoDrink();
+  if(!S.boards.veg)S.boards.veg=ketoVeg();
+  const h=S.boards[S.home];
+  if(h&&!h.items.some(i=>i.link==='drink')){const k=h.items.findIndex(i=>i.label==='Tired'&&!i.link);
+    const d=fold('Drinks','🥤','drink');if(k>=0){h.items.splice(k,1,d);const fe=S.boards.feel;if(fe&&!fe.items.some(i=>i.label==='Tired'))fe.items.push(it('Tired','😴','desc'))}else h.items.push(d)}
+  if(S.boards.ketofood&&h)h.items.push(fold('Keto food','🥑','ketofood'));
+  S.dataV=3;try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}
+})();
 let board=S.home, page=0, stack=[], editing=false, sentence=[];
 function load(){try{const t=localStorage.getItem(KEY);return t?JSON.parse(t):null}catch(e){return null}}
 function save(){try{localStorage.setItem(KEY,JSON.stringify(S));return true}catch(e){toastErr('Could not save. Storage may be full: try smaller photos or remove some.');return false}}
@@ -502,6 +530,6 @@ function openSettings(){
 /* keep screen awake while open, where allowed */
 async function wake(){try{if(navigator.wakeLock)await navigator.wakeLock.request('screen')}catch(e){}}
 document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')wake()});
-wake();applyTheme();render();loadClips();
+wake();applyTheme();render();loadClips().then(()=>{if(elOn()&&navigator.onLine!==false)recordAll().catch(()=>{})});
 })();
 </script>
